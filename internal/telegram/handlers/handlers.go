@@ -36,7 +36,7 @@ type Handler struct {
 
 // Transcriber converts audio to text.
 type Transcriber interface {
-	Transcribe(ctx context.Context, reader io.Reader, language string) (string, error)
+	Transcribe(ctx context.Context, reader io.Reader, filename, contentType, language string) (string, error)
 }
 
 // NewHandler creates a new update handler.
@@ -180,8 +180,12 @@ func (h *Handler) transcribeVoice(ctx context.Context, voice *telego.Voice) (str
 	if err != nil {
 		return "", err
 	}
-	reader := bytes.NewReader(data)
-	return h.transcriber.Transcribe(ctx, reader, h.sttLang)
+	normalized, mimeType, fileName, err := normalizeVoiceAudio(ctx, data, "", file.FilePath)
+	if err != nil {
+		return "", err
+	}
+	reader := bytes.NewReader(normalized)
+	return h.transcriber.Transcribe(ctx, reader, fileName, mimeType, h.sttLang)
 }
 
 var errTranscriberDisabled = errors.New("transcriber disabled")

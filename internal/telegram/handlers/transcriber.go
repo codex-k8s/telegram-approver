@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -27,15 +28,29 @@ func NewOpenAITranscriber(apiKey, model string, timeout time.Duration, log *slog
 }
 
 // Transcribe converts audio to text.
-func (t *OpenAITranscriber) Transcribe(ctx context.Context, reader io.Reader, language string) (string, error) {
+func (t *OpenAITranscriber) Transcribe(ctx context.Context, reader io.Reader, filename, contentType, language string) (string, error) {
 	if reader == nil {
 		return "", errors.New("empty audio reader")
+	}
+	data, err := io.ReadAll(reader)
+	if err != nil {
+		return "", err
+	}
+	if len(data) == 0 {
+		return "", errors.New("empty audio content")
 	}
 	transcribeCtx, cancel := context.WithTimeout(ctx, t.timeout)
 	defer cancel()
 
+	if filename == "" {
+		filename = "voice.mp3"
+	}
+	if contentType == "" {
+		contentType = "audio/mpeg"
+	}
+
 	params := openai.AudioTranscriptionNewParams{
-		File:  reader,
+		File:  openai.File(bytes.NewReader(data), filename, contentType),
 		Model: openai.AudioModel(t.model),
 	}
 	if language != "" {

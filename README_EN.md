@@ -133,6 +133,12 @@ Kubernetes health endpoints.
 
 If `TG_APPROVER_OPENAI_API_KEY` is set, the bot accepts voice messages and transcribes them via OpenAI `gpt-4o-mini-transcribe`. Audio is stored **in memory only** during transcription.
 
+For voice transcription, `ffmpeg` is required (used to normalize the format for OpenAI):
+
+```
+sudo apt-get install -y ffmpeg
+```
+
 ---
 
 ## 🧷 Security & limitations
