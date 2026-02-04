@@ -30,6 +30,14 @@ If the timeout expires, the response is `decision=error`, buttons are removed, a
 
 ---
 
+## 🔗 Related repositories
+
+- `yaml-mcp-server` — MCP gateway with YAML DSL and approver chains: https://github.com/codex-k8s/yaml-mcp-server
+- `codexctl` — CLI orchestrator for environments and Codex workflows: https://github.com/codex-k8s/codexctl
+- `project-example` — Kubernetes project example with ready manifests: https://github.com/codex-k8s/project-example
+
+---
+
 ## 📦 Installation
 
 Requirements: Go **>= 1.25.5**.
@@ -46,6 +54,7 @@ go install github.com/codex-k8s/telegram-approver/cmd/telegram-approver@latest
 2. Obtain the user `chat_id`:
    - Send any message to the bot first.
    - Get `chat_id` via a helper bot/script or `getUpdates`.
+   - Quick option: use **@userinfobot**.
 
 > Important: the service accepts decisions **only from one chat**.
 
@@ -82,7 +91,7 @@ Webhook mode is enabled **only if both** `TG_APPROVER_WEBHOOK_URL` and `TG_APPRO
 ```json
 {
   "correlation_id": "req-123",
-  "tool": "GitHubSecretCreatorInK8s",
+  "tool": "github_create_env_secret_k8s",
   "arguments": {
     "namespace": "ai-staging",
     "k8s_secret_name": "pg-password"

@@ -30,6 +30,14 @@
 
 ---
 
+## 🔗 Связанные репозитории
+
+- `yaml-mcp-server` — MCP‑gateway с YAML‑DSL и цепочками аппруверов: https://github.com/codex-k8s/yaml-mcp-server
+- `codexctl` — CLI‑оркестратор окружений и Codex‑потоков: https://github.com/codex-k8s/codexctl
+- `project-example` — пример Kubernetes‑проекта с готовыми манифестами: https://github.com/codex-k8s/project-example
+
+---
+
 ## 📦 Установка
 
 Требования: Go **>= 1.25.5**.
@@ -46,6 +54,7 @@ go install github.com/codex-k8s/telegram-approver/cmd/telegram-approver@latest
 2. Узнай `chat_id` пользователя:
    - Напиши боту любое сообщение (иначе он не сможет писать первым).
    - Получи `chat_id` через тестовый скрипт/бота, либо через `getUpdates`.
+   - Быстрый вариант: написать **@userinfobot**.
 
 > Важно: сервис принимает решения **только из одного чата**.
 
@@ -82,7 +91,7 @@ Webhook‑режим включается **только если заданы �
 ```json
 {
   "correlation_id": "req-123",
-  "tool": "GitHubSecretCreatorInK8s",
+  "tool": "github_create_env_secret_k8s",
   "arguments": {
     "namespace": "ai-staging",
     "k8s_secret_name": "pg-password"
