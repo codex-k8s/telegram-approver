@@ -200,29 +200,40 @@ func parseMode(markup string) string {
 	case "html":
 		return telego.ModeHTML
 	default:
-		return telego.ModeMarkdown
+		return telego.ModeMarkdownV2
 	}
 }
 
 func renderMarkdown(msg i18n.Messages, req approvals.Request, payload []byte) string {
 	builder := &strings.Builder{}
 	builder.WriteString("*")
-	builder.WriteString(msg.ApprovalTitle)
+	builder.WriteString(escapeMarkdownV2(msg.ApprovalTitle))
 	builder.WriteString("*\n\n")
+	contextTitle := msg.SectionContext
+	if strings.TrimSpace(contextTitle) == "" {
+		contextTitle = "Context"
+	}
+	actionTitle := msg.SectionAction
+	if strings.TrimSpace(actionTitle) == "" {
+		actionTitle = "Action"
+	}
+	paramsTitle := msg.SectionParams
+	if strings.TrimSpace(paramsTitle) == "" {
+		paramsTitle = msg.ApprovalParams
+	}
+	if strings.TrimSpace(paramsTitle) == "" {
+		paramsTitle = "Parameters"
+	}
+	risksTitle := msg.SectionRisks
+	if strings.TrimSpace(risksTitle) == "" {
+		risksTitle = "Risks"
+	}
+
 	builder.WriteString("*")
-	builder.WriteString(msg.ApprovalCorrelation)
-	builder.WriteString("*")
-	builder.WriteString(": `")
-	builder.WriteString(req.CorrelationID)
-	builder.WriteString("`\n")
-	builder.WriteString("*")
-	builder.WriteString(msg.ApprovalTool)
-	builder.WriteString("*")
-	builder.WriteString(": `")
-	builder.WriteString(req.Tool)
-	builder.WriteString("`\n\n")
+	builder.WriteString(escapeMarkdownV2(contextTitle))
+	builder.WriteString("*\n")
 	if strings.TrimSpace(req.ApprovalRequest) != "" {
-		builder.WriteString(req.ApprovalRequest)
+		builder.WriteString(escapeMarkdownV2(req.ApprovalRequest))
 		builder.WriteString("\n\n")
 	}
 	if strings.TrimSpace(req.Justification) != "" {
@@ -231,9 +242,9 @@ func renderMarkdown(msg i18n.Messages, req approvals.Request, payload []byte) st
 			label = "Justification"
 		}
 		builder.WriteString("*")
-		builder.WriteString(label)
+		builder.WriteString(escapeMarkdownV2(label))
 		builder.WriteString(":* ")
-		builder.WriteString(req.Justification)
+		builder.WriteString(escapeMarkdownV2(req.Justification))
 		builder.WriteString("\n\n")
 	}
 	if len(req.LinksToCode) > 0 {
@@ -242,22 +253,44 @@ func renderMarkdown(msg i18n.Messages, req approvals.Request, payload []byte) st
 			label = "Links"
 		}
 		builder.WriteString("*")
-		builder.WriteString(label)
+		builder.WriteString(escapeMarkdownV2(label))
 		builder.WriteString(":*\n")
 		for _, link := range req.LinksToCode {
-			builder.WriteString("- [")
-			builder.WriteString(link.Text)
+			builder.WriteString("• [")
+			builder.WriteString(escapeMarkdownV2(link.Text))
 			builder.WriteString("](")
-			builder.WriteString(link.URL)
+			builder.WriteString(escapeMarkdownV2URL(link.URL))
 			builder.WriteString(")\n")
 		}
 		builder.WriteString("\n")
 	}
+
+	if strings.TrimSpace(req.RiskAssessment) != "" {
+		builder.WriteString("*")
+		builder.WriteString(escapeMarkdownV2(risksTitle))
+		builder.WriteString("*\n")
+		builder.WriteString(escapeMarkdownV2(req.RiskAssessment))
+		builder.WriteString("\n\n")
+	}
+
 	builder.WriteString("*")
-	builder.WriteString(msg.ApprovalParams)
+	builder.WriteString(escapeMarkdownV2(actionTitle))
+	builder.WriteString("*\n")
 	builder.WriteString("*")
-	builder.WriteString(":\n\n```json\n")
-	builder.Write(payload)
+	builder.WriteString(escapeMarkdownV2(msg.ApprovalTool))
+	builder.WriteString(":* `")
+	builder.WriteString(escapeMarkdownV2Code(req.Tool))
+	builder.WriteString("`\n")
+	builder.WriteString("*")
+	builder.WriteString(escapeMarkdownV2(msg.ApprovalCorrelation))
+	builder.WriteString(":* `")
+	builder.WriteString(escapeMarkdownV2Code(req.CorrelationID))
+	builder.WriteString("`\n\n")
+
+	builder.WriteString("*")
+	builder.WriteString(escapeMarkdownV2(paramsTitle))
+	builder.WriteString("*\n\n```json\n")
+	builder.WriteString(escapeMarkdownV2CodeBlock(string(payload)))
 	builder.WriteString("\n```")
 	return builder.String()
 }
@@ -267,20 +300,31 @@ func renderHTML(msg i18n.Messages, req approvals.Request, payload []byte) string
 	builder.WriteString("<b>")
 	builder.WriteString(htmlEscape(msg.ApprovalTitle))
 	builder.WriteString("</b><br><br>")
+	contextTitle := msg.SectionContext
+	if strings.TrimSpace(contextTitle) == "" {
+		contextTitle = "Context"
+	}
+	actionTitle := msg.SectionAction
+	if strings.TrimSpace(actionTitle) == "" {
+		actionTitle = "Action"
+	}
+	paramsTitle := msg.SectionParams
+	if strings.TrimSpace(paramsTitle) == "" {
+		paramsTitle = msg.ApprovalParams
+	}
+	if strings.TrimSpace(paramsTitle) == "" {
+		paramsTitle = "Parameters"
+	}
+	risksTitle := msg.SectionRisks
+	if strings.TrimSpace(risksTitle) == "" {
+		risksTitle = "Risks"
+	}
+
 	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(msg.ApprovalCorrelation))
-	builder.WriteString("</b>")
-	builder.WriteString(": <code>")
-	builder.WriteString(htmlEscape(req.CorrelationID))
-	builder.WriteString("</code><br>")
-	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(msg.ApprovalTool))
-	builder.WriteString("</b>")
-	builder.WriteString(": <code>")
-	builder.WriteString(htmlEscape(req.Tool))
-	builder.WriteString("</code><br><br>")
+	builder.WriteString(htmlEscape(contextTitle))
+	builder.WriteString("</b><br>")
 	if strings.TrimSpace(req.ApprovalRequest) != "" {
-		builder.WriteString(req.ApprovalRequest)
+		builder.WriteString(htmlEscape(req.ApprovalRequest))
 		builder.WriteString("<br><br>")
 	}
 	if strings.TrimSpace(req.Justification) != "" {
@@ -291,7 +335,7 @@ func renderHTML(msg i18n.Messages, req approvals.Request, payload []byte) string
 		builder.WriteString("<b>")
 		builder.WriteString(htmlEscape(label))
 		builder.WriteString(":</b> ")
-		builder.WriteString(req.Justification)
+		builder.WriteString(htmlEscape(req.Justification))
 		builder.WriteString("<br><br>")
 	}
 	if len(req.LinksToCode) > 0 {
@@ -311,10 +355,32 @@ func renderHTML(msg i18n.Messages, req approvals.Request, payload []byte) string
 		}
 		builder.WriteString("<br>")
 	}
+
+	if strings.TrimSpace(req.RiskAssessment) != "" {
+		builder.WriteString("<b>")
+		builder.WriteString(htmlEscape(risksTitle))
+		builder.WriteString("</b><br>")
+		builder.WriteString(htmlEscape(req.RiskAssessment))
+		builder.WriteString("<br><br>")
+	}
+
 	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(msg.ApprovalParams))
-	builder.WriteString("</b>")
-	builder.WriteString(":<br><pre><code>")
+	builder.WriteString(htmlEscape(actionTitle))
+	builder.WriteString("</b><br>")
+	builder.WriteString("<b>")
+	builder.WriteString(htmlEscape(msg.ApprovalTool))
+	builder.WriteString(":</b> <code>")
+	builder.WriteString(htmlEscape(req.Tool))
+	builder.WriteString("</code><br>")
+	builder.WriteString("<b>")
+	builder.WriteString(htmlEscape(msg.ApprovalCorrelation))
+	builder.WriteString(":</b> <code>")
+	builder.WriteString(htmlEscape(req.CorrelationID))
+	builder.WriteString("</code><br><br>")
+
+	builder.WriteString("<b>")
+	builder.WriteString(htmlEscape(paramsTitle))
+	builder.WriteString("</b><br><pre><code>")
 	builder.WriteString(htmlEscape(string(payload)))
 	builder.WriteString("</code></pre>")
 	return builder.String()
@@ -329,4 +395,68 @@ func htmlEscape(value string) string {
 		"'", "&#39;",
 	)
 	return replacer.Replace(value)
+}
+
+func escapeMarkdownV2(value string) string {
+	if value == "" {
+		return value
+	}
+	var builder strings.Builder
+	builder.Grow(len(value) * 2)
+	for _, r := range value {
+		switch r {
+		case '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!', '\\':
+			builder.WriteByte('\\')
+		}
+		builder.WriteRune(r)
+	}
+	return builder.String()
+}
+
+func escapeMarkdownV2Code(value string) string {
+	if value == "" {
+		return value
+	}
+	var builder strings.Builder
+	builder.Grow(len(value) * 2)
+	for _, r := range value {
+		switch r {
+		case '\\', '`':
+			builder.WriteByte('\\')
+		}
+		builder.WriteRune(r)
+	}
+	return builder.String()
+}
+
+func escapeMarkdownV2CodeBlock(value string) string {
+	if value == "" {
+		return value
+	}
+	var builder strings.Builder
+	builder.Grow(len(value) * 2)
+	for _, r := range value {
+		switch r {
+		case '\\', '`':
+			builder.WriteByte('\\')
+		}
+		builder.WriteRune(r)
+	}
+	return builder.String()
+}
+
+func escapeMarkdownV2URL(value string) string {
+	if value == "" {
+		return value
+	}
+	var builder strings.Builder
+	builder.Grow(len(value) * 2)
+	for _, r := range value {
+		switch r {
+		case '\\', ')':
+			builder.WriteByte('\\')
+		}
+		builder.WriteRune(r)
+	}
+	return builder.String()
 }

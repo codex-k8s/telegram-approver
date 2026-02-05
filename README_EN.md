@@ -102,6 +102,7 @@ use it only in an isolated environment.
   },
   "justification": "Need a new password for the billing service.",
   "approval_request": "Create a secret and inject it into Kubernetes.",
+  "risk_assessment": "May affect DB access if the new secret is misused.",
   "links_to_code": [
     { "text": "PR #42", "url": "https://github.com/org/repo/pull/42" }
   ],
@@ -115,6 +116,8 @@ use it only in an isolated environment.
 ```
 
 `callback.url` is required — decisions are always delivered asynchronously.
+
+Required fields (10–500 chars): `justification`, `approval_request`, `risk_assessment`.
 
 **Response**:
 
@@ -150,7 +153,7 @@ Kubernetes health endpoints.
 
 ## 🧠 Telegram message format
 
-- Markdown or HTML is used (depending on `markup`).
+- MarkdownV2 or HTML is used (depending on `markup`).
 - Request parameters are shown as a JSON block.
 - For `Deny with message` the bot replies and waits for text/voice.
 - After a decision, buttons are replaced with a delete button.

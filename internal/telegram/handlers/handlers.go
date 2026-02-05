@@ -247,11 +247,11 @@ func (h *Handler) resolveDecision(ctx context.Context, query *telego.CallbackQue
 	msg := h.messageFor(approval.Request.Lang)
 	switch decision {
 	case approvals.DecisionApprove:
-		_ = h.answerCallback(ctx, query, msg.ApprovedNote)
+		_ = h.answerCallback(ctx, query, "✅ "+msg.ApprovedNote)
 	case approvals.DecisionDeny:
-		_ = h.answerCallback(ctx, query, msg.DeniedNote)
+		_ = h.answerCallback(ctx, query, "❌ "+msg.DeniedNote)
 	default:
-		_ = h.answerCallback(ctx, query, msg.ErrorNote)
+		_ = h.answerCallback(ctx, query, "⚠️ "+msg.ErrorNote)
 	}
 }
 
@@ -374,23 +374,23 @@ func (h *Handler) messageFor(lang string) i18n.Messages {
 func (h *Handler) noteForResult(msg i18n.Messages, result approvals.Result, timeoutMessage string) string {
 	switch result.Decision {
 	case approvals.DecisionApprove:
-		return msg.ApprovedNote
+		return "✅ " + msg.ApprovedNote
 	case approvals.DecisionDeny:
 		if strings.TrimSpace(result.Reason) != "" && result.Reason != "denied" {
-			return fmt.Sprintf("%s\n%s", msg.DeniedNote, result.Reason)
+			return fmt.Sprintf("❌ %s\n%s", msg.DeniedNote, result.Reason)
 		}
-		return msg.DeniedNote
+		return "❌ " + msg.DeniedNote
 	case approvals.DecisionError:
 		if strings.TrimSpace(result.Reason) == "approval timeout" {
 			if strings.TrimSpace(timeoutMessage) != "" {
 				return timeoutMessage
 			}
-			return msg.TimeoutNote
+			return "⏱️ " + msg.TimeoutNote
 		}
 		if strings.TrimSpace(result.Reason) != "" {
 			return fmt.Sprintf("⚠️ %s", result.Reason)
 		}
-		return msg.ErrorNote
+		return "⚠️ " + msg.ErrorNote
 	default:
 		return ""
 	}

@@ -32,6 +32,7 @@ type ApproveRequest struct {
 	Arguments       map[string]any      `json:"arguments"`
 	Justification   string              `json:"justification,omitempty"`
 	ApprovalRequest string              `json:"approval_request,omitempty"`
+	RiskAssessment  string              `json:"risk_assessment,omitempty"`
 	LinksToCode     []approvals.Link    `json:"links_to_code,omitempty"`
 	Lang            string              `json:"lang,omitempty"`
 	Markup          string              `json:"markup,omitempty"`
@@ -69,17 +70,29 @@ func (h *ApproveHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if req.Arguments == nil {
 		req.Arguments = map[string]any{}
 	}
-	if req.Justification != "" {
-		if err := validateReasonLength("justification", req.Justification); err != nil {
-			h.respond(w, http.StatusBadRequest, approvals.DecisionError, err.Error())
-			return
-		}
+	if strings.TrimSpace(req.Justification) == "" {
+		h.respond(w, http.StatusBadRequest, approvals.DecisionError, "justification is required")
+		return
 	}
-	if req.ApprovalRequest != "" {
-		if err := validateReasonLength("approval_request", req.ApprovalRequest); err != nil {
-			h.respond(w, http.StatusBadRequest, approvals.DecisionError, err.Error())
-			return
-		}
+	if err := validateReasonLength("justification", req.Justification); err != nil {
+		h.respond(w, http.StatusBadRequest, approvals.DecisionError, err.Error())
+		return
+	}
+	if strings.TrimSpace(req.ApprovalRequest) == "" {
+		h.respond(w, http.StatusBadRequest, approvals.DecisionError, "approval_request is required")
+		return
+	}
+	if err := validateReasonLength("approval_request", req.ApprovalRequest); err != nil {
+		h.respond(w, http.StatusBadRequest, approvals.DecisionError, err.Error())
+		return
+	}
+	if strings.TrimSpace(req.RiskAssessment) == "" {
+		h.respond(w, http.StatusBadRequest, approvals.DecisionError, "risk_assessment is required")
+		return
+	}
+	if err := validateReasonLength("risk_assessment", req.RiskAssessment); err != nil {
+		h.respond(w, http.StatusBadRequest, approvals.DecisionError, err.Error())
+		return
 	}
 	if len(req.LinksToCode) > 5 {
 		req.LinksToCode = req.LinksToCode[:5]
@@ -119,6 +132,7 @@ func (h *ApproveHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		Arguments:       req.Arguments,
 		Justification:   req.Justification,
 		ApprovalRequest: req.ApprovalRequest,
+		RiskAssessment:  req.RiskAssessment,
 		LinksToCode:     req.LinksToCode,
 		Lang:            req.Lang,
 		Markup:          req.Markup,

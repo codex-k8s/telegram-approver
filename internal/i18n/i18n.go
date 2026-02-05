@@ -14,6 +14,10 @@ type Messages struct {
 	ApprovalCorrelation   string `yaml:"approval_correlation"`
 	ApprovalTool          string `yaml:"approval_tool"`
 	ApprovalParams        string `yaml:"approval_params"`
+	SectionContext        string `yaml:"section_context"`
+	SectionAction         string `yaml:"section_action"`
+	SectionRisks          string `yaml:"section_risks"`
+	SectionParams         string `yaml:"section_params"`
 	JustificationLabel    string `yaml:"justification_label"`
 	LinksLabel            string `yaml:"links_label"`
 	ApproveButton         string `yaml:"approve_button"`

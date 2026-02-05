@@ -46,6 +46,8 @@ type Request struct {
 	Justification string
 	// ApprovalRequest describes the requested action.
 	ApprovalRequest string
+	// RiskAssessment describes potential risks.
+	RiskAssessment string
 	// LinksToCode are optional references.
 	LinksToCode []Link
 	// Lang selects message language.
