@@ -15,6 +15,7 @@ import (
 
 	"github.com/codex-k8s/telegram-approver/internal/approvals"
 	"github.com/codex-k8s/telegram-approver/internal/i18n"
+	"github.com/codex-k8s/telegram-approver/internal/telegram/shared"
 	"github.com/mymmrac/telego"
 	tu "github.com/mymmrac/telego/telegoutil"
 )
@@ -358,17 +359,7 @@ func (h *Handler) sendWebhook(ctx context.Context, approval *approvals.Approval,
 }
 
 func (h *Handler) messageFor(lang string) i18n.Messages {
-	lang = strings.ToLower(strings.TrimSpace(lang))
-	if lang == "" {
-		lang = h.defaultLang
-	}
-	if msg, ok := h.messages[lang]; ok {
-		return msg
-	}
-	if msg, ok := h.messages["en"]; ok {
-		return msg
-	}
-	return i18n.Messages{}
+	return shared.MessagesFor(h.messages, lang, h.defaultLang)
 }
 
 func (h *Handler) noteForResult(msg i18n.Messages, result approvals.Result, timeoutMessage string) string {

@@ -11,6 +11,7 @@ import (
 	"github.com/codex-k8s/telegram-approver/internal/config"
 	"github.com/codex-k8s/telegram-approver/internal/i18n"
 	"github.com/codex-k8s/telegram-approver/internal/telegram/handlers"
+	"github.com/codex-k8s/telegram-approver/internal/telegram/shared"
 	"github.com/codex-k8s/telegram-approver/internal/telegram/updates"
 	"github.com/mymmrac/telego"
 	tu "github.com/mymmrac/telego/telegoutil"
@@ -177,17 +178,7 @@ func (s *Service) scheduleTimeout(correlationID string, timeout time.Duration, t
 }
 
 func (s *Service) messagesFor(lang string) i18n.Messages {
-	lang = strings.ToLower(strings.TrimSpace(lang))
-	if lang == "" {
-		lang = s.lang
-	}
-	if msg, ok := s.messages[lang]; ok {
-		return msg
-	}
-	if msg, ok := s.messages["en"]; ok {
-		return msg
-	}
-	return i18n.Messages{}
+	return shared.MessagesFor(s.messages, lang, s.lang)
 }
 
 func parseMode(markup string) string {
@@ -200,216 +191,178 @@ func parseMode(markup string) string {
 }
 
 func renderMarkdown(msg i18n.Messages, req approvals.Request) string {
-	builder := &strings.Builder{}
-	builder.WriteString("*")
-	builder.WriteString(escapeMarkdownV2(msg.ApprovalTitle))
-	builder.WriteString("*\n\n")
-	contextTitle := msg.SectionContext
-	if strings.TrimSpace(contextTitle) == "" {
-		contextTitle = "Context"
-	}
-	actionTitle := msg.SectionAction
-	if strings.TrimSpace(actionTitle) == "" {
-		actionTitle = "Action"
-	}
-	risksTitle := msg.SectionRisks
-	if strings.TrimSpace(risksTitle) == "" {
-		risksTitle = "Risks"
-	}
-
-	builder.WriteString("*")
-	builder.WriteString(escapeMarkdownV2(contextTitle))
-	builder.WriteString("*\n")
-	if strings.TrimSpace(req.ApprovalRequest) != "" {
-		builder.WriteString(escapeMarkdownV2(req.ApprovalRequest))
-		builder.WriteString("\n\n")
-	}
-	if strings.TrimSpace(req.Justification) != "" {
-		label := msg.JustificationLabel
-		if strings.TrimSpace(label) == "" {
-			label = "Justification"
-		}
-		builder.WriteString("*")
-		builder.WriteString(escapeMarkdownV2(label))
-		builder.WriteString(":* ")
-		builder.WriteString(escapeMarkdownV2(req.Justification))
-		builder.WriteString("\n\n")
-	}
-	if len(req.LinksToCode) > 0 {
-		label := msg.LinksLabel
-		if strings.TrimSpace(label) == "" {
-			label = "Links"
-		}
-		builder.WriteString("*")
-		builder.WriteString(escapeMarkdownV2(label))
-		builder.WriteString(":*\n")
-		for _, link := range req.LinksToCode {
-			builder.WriteString("• [")
-			builder.WriteString(escapeMarkdownV2(link.Text))
-			builder.WriteString("](")
-			builder.WriteString(escapeMarkdownV2URL(link.URL))
-			builder.WriteString(")\n")
-		}
-		builder.WriteString("\n")
-	}
-
-	if strings.TrimSpace(req.RiskAssessment) != "" {
-		builder.WriteString("*")
-		builder.WriteString(escapeMarkdownV2(risksTitle))
-		builder.WriteString("*\n")
-		builder.WriteString(escapeMarkdownV2(req.RiskAssessment))
-		builder.WriteString("\n\n")
-	}
-
-	builder.WriteString("*")
-	builder.WriteString(escapeMarkdownV2(actionTitle))
-	builder.WriteString("*\n")
-	builder.WriteString("*")
-	builder.WriteString(escapeMarkdownV2(msg.ApprovalTool))
-	builder.WriteString(":* `")
-	builder.WriteString(escapeMarkdownV2Code(req.Tool))
-	builder.WriteString("`\n")
-	builder.WriteString("*")
-	builder.WriteString(escapeMarkdownV2(msg.ApprovalCorrelation))
-	builder.WriteString(":* `")
-	builder.WriteString(escapeMarkdownV2Code(req.CorrelationID))
-	builder.WriteString("`\n\n")
-	return builder.String()
+	return renderApproval(msg, req, markdownApprovalWriter{})
 }
 
 func renderHTML(msg i18n.Messages, req approvals.Request) string {
-	builder := &strings.Builder{}
-	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(msg.ApprovalTitle))
-	builder.WriteString("</b><br><br>")
-	contextTitle := msg.SectionContext
-	if strings.TrimSpace(contextTitle) == "" {
-		contextTitle = "Context"
-	}
-	actionTitle := msg.SectionAction
-	if strings.TrimSpace(actionTitle) == "" {
-		actionTitle = "Action"
-	}
-	risksTitle := msg.SectionRisks
-	if strings.TrimSpace(risksTitle) == "" {
-		risksTitle = "Risks"
-	}
+	return renderApproval(msg, req, htmlApprovalWriter{})
+}
 
-	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(contextTitle))
-	builder.WriteString("</b><br>")
+func renderApproval(msg i18n.Messages, req approvals.Request, writer approvalMessageWriter) string {
+	labels := approvalLabelsFor(msg)
+	builder := &strings.Builder{}
+	writer.WriteTitle(builder, msg.ApprovalTitle)
+
+	writer.WriteSectionHeader(builder, labels.ContextTitle)
 	if strings.TrimSpace(req.ApprovalRequest) != "" {
-		builder.WriteString(htmlEscape(req.ApprovalRequest))
-		builder.WriteString("<br><br>")
+		writer.WritePlain(builder, req.ApprovalRequest, true)
 	}
 	if strings.TrimSpace(req.Justification) != "" {
-		label := msg.JustificationLabel
-		if strings.TrimSpace(label) == "" {
-			label = "Justification"
-		}
-		builder.WriteString("<b>")
-		builder.WriteString(htmlEscape(label))
-		builder.WriteString(":</b> ")
-		builder.WriteString(htmlEscape(req.Justification))
-		builder.WriteString("<br><br>")
+		writer.WriteLabelValue(builder, labels.JustificationLabel, req.Justification, true)
 	}
 	if len(req.LinksToCode) > 0 {
-		label := msg.LinksLabel
-		if strings.TrimSpace(label) == "" {
-			label = "Links"
-		}
-		builder.WriteString("<b>")
-		builder.WriteString(htmlEscape(label))
-		builder.WriteString(":</b><br>")
-		for _, link := range req.LinksToCode {
-			builder.WriteString("• <a href=\"")
-			builder.WriteString(htmlEscape(link.URL))
-			builder.WriteString("\">")
-			builder.WriteString(htmlEscape(link.Text))
-			builder.WriteString("</a><br>")
-		}
-		builder.WriteString("<br>")
+		writer.WriteLinks(builder, labels.LinksLabel, req.LinksToCode)
 	}
-
 	if strings.TrimSpace(req.RiskAssessment) != "" {
-		builder.WriteString("<b>")
-		builder.WriteString(htmlEscape(risksTitle))
-		builder.WriteString("</b><br>")
-		builder.WriteString(htmlEscape(req.RiskAssessment))
-		builder.WriteString("<br><br>")
+		writer.WriteSectionHeader(builder, labels.RisksTitle)
+		writer.WritePlain(builder, req.RiskAssessment, true)
 	}
+	writer.WriteSectionHeader(builder, labels.ActionTitle)
+	writer.WriteCodeValue(builder, msg.ApprovalTool, req.Tool, false)
+	writer.WriteCodeValue(builder, msg.ApprovalCorrelation, req.CorrelationID, true)
+	return builder.String()
+}
 
+type approvalMessageWriter interface {
+	WriteTitle(builder *strings.Builder, title string)
+	WriteSectionHeader(builder *strings.Builder, title string)
+	WritePlain(builder *strings.Builder, value string, addEmptyLine bool)
+	WriteLabelValue(builder *strings.Builder, label, value string, addEmptyLine bool)
+	WriteCodeValue(builder *strings.Builder, label, value string, addEmptyLine bool)
+	WriteLinks(builder *strings.Builder, label string, links []approvals.Link)
+}
+
+type markdownApprovalWriter struct{}
+
+func (markdownApprovalWriter) WriteTitle(builder *strings.Builder, title string) {
+	builder.WriteString("*")
+	builder.WriteString(shared.EscapeMarkdownV2(title))
+	builder.WriteString("*\n\n")
+}
+
+func (markdownApprovalWriter) WriteSectionHeader(builder *strings.Builder, title string) {
+	builder.WriteString("*")
+	builder.WriteString(shared.EscapeMarkdownV2(title))
+	builder.WriteString("*\n")
+}
+
+func (markdownApprovalWriter) WritePlain(builder *strings.Builder, value string, addEmptyLine bool) {
+	builder.WriteString(shared.EscapeMarkdownV2(value))
+	builder.WriteString("\n")
+	appendOptionalLineBreak(builder, "\n", addEmptyLine)
+}
+
+func (markdownApprovalWriter) WriteLabelValue(builder *strings.Builder, label, value string, addEmptyLine bool) {
+	builder.WriteString("*")
+	builder.WriteString(shared.EscapeMarkdownV2(label))
+	builder.WriteString(":* ")
+	builder.WriteString(shared.EscapeMarkdownV2(value))
+	builder.WriteString("\n")
+	appendOptionalLineBreak(builder, "\n", addEmptyLine)
+}
+
+func (markdownApprovalWriter) WriteCodeValue(builder *strings.Builder, label, value string, addEmptyLine bool) {
+	builder.WriteString("*")
+	builder.WriteString(shared.EscapeMarkdownV2(label))
+	builder.WriteString(":* `")
+	builder.WriteString(shared.EscapeMarkdownV2Code(value))
+	builder.WriteString("`\n")
+	appendOptionalLineBreak(builder, "\n", addEmptyLine)
+}
+
+func (markdownApprovalWriter) WriteLinks(builder *strings.Builder, label string, links []approvals.Link) {
+	builder.WriteString("*")
+	builder.WriteString(shared.EscapeMarkdownV2(label))
+	builder.WriteString(":*\n")
+	for _, link := range links {
+		builder.WriteString("• [")
+		builder.WriteString(shared.EscapeMarkdownV2(link.Text))
+		builder.WriteString("](")
+		builder.WriteString(shared.EscapeMarkdownV2URL(link.URL))
+		builder.WriteString(")\n")
+	}
+	builder.WriteString("\n")
+}
+
+type htmlApprovalWriter struct{}
+
+func (htmlApprovalWriter) WriteTitle(builder *strings.Builder, title string) {
 	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(actionTitle))
+	builder.WriteString(shared.EscapeHTML(title))
+	builder.WriteString("</b><br><br>")
+}
+
+func (htmlApprovalWriter) WriteSectionHeader(builder *strings.Builder, title string) {
+	builder.WriteString("<b>")
+	builder.WriteString(shared.EscapeHTML(title))
 	builder.WriteString("</b><br>")
+}
+
+func (htmlApprovalWriter) WritePlain(builder *strings.Builder, value string, addEmptyLine bool) {
+	builder.WriteString(shared.EscapeHTML(value))
+	builder.WriteString("<br>")
+	appendOptionalLineBreak(builder, "<br>", addEmptyLine)
+}
+
+func (htmlApprovalWriter) WriteLabelValue(builder *strings.Builder, label, value string, addEmptyLine bool) {
 	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(msg.ApprovalTool))
+	builder.WriteString(shared.EscapeHTML(label))
+	builder.WriteString(":</b> ")
+	builder.WriteString(shared.EscapeHTML(value))
+	builder.WriteString("<br>")
+	appendOptionalLineBreak(builder, "<br>", addEmptyLine)
+}
+
+func (htmlApprovalWriter) WriteCodeValue(builder *strings.Builder, label, value string, addEmptyLine bool) {
+	builder.WriteString("<b>")
+	builder.WriteString(shared.EscapeHTML(label))
 	builder.WriteString(":</b> <code>")
-	builder.WriteString(htmlEscape(req.Tool))
+	builder.WriteString(shared.EscapeHTML(value))
 	builder.WriteString("</code><br>")
+	appendOptionalLineBreak(builder, "<br>", addEmptyLine)
+}
+
+func (htmlApprovalWriter) WriteLinks(builder *strings.Builder, label string, links []approvals.Link) {
 	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(msg.ApprovalCorrelation))
-	builder.WriteString(":</b> <code>")
-	builder.WriteString(htmlEscape(req.CorrelationID))
-	builder.WriteString("</code><br><br>")
-	return builder.String()
+	builder.WriteString(shared.EscapeHTML(label))
+	builder.WriteString(":</b><br>")
+	for _, link := range links {
+		builder.WriteString("• <a href=\"")
+		builder.WriteString(shared.EscapeHTML(link.URL))
+		builder.WriteString("\">")
+		builder.WriteString(shared.EscapeHTML(link.Text))
+		builder.WriteString("</a><br>")
+	}
+	builder.WriteString("<br>")
 }
 
-func htmlEscape(value string) string {
-	replacer := strings.NewReplacer(
-		"&", "&amp;",
-		"<", "&lt;",
-		">", "&gt;",
-		`"`, "&quot;",
-		"'", "&#39;",
-	)
-	return replacer.Replace(value)
+func appendOptionalLineBreak(builder *strings.Builder, lineBreak string, enabled bool) {
+	if enabled {
+		builder.WriteString(lineBreak)
+	}
 }
 
-func escapeMarkdownV2(value string) string {
-	if value == "" {
-		return value
-	}
-	var builder strings.Builder
-	builder.Grow(len(value) * 2)
-	for _, r := range value {
-		switch r {
-		case '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!', '\\':
-			builder.WriteByte('\\')
-		}
-		builder.WriteRune(r)
-	}
-	return builder.String()
+type approvalLabels struct {
+	ContextTitle       string
+	ActionTitle        string
+	RisksTitle         string
+	JustificationLabel string
+	LinksLabel         string
 }
 
-func escapeMarkdownV2Code(value string) string {
-	if value == "" {
-		return value
+func approvalLabelsFor(msg i18n.Messages) approvalLabels {
+	return approvalLabels{
+		ContextTitle:       fallbackText(msg.SectionContext, "Context"),
+		ActionTitle:        fallbackText(msg.SectionAction, "Action"),
+		RisksTitle:         fallbackText(msg.SectionRisks, "Risks"),
+		JustificationLabel: fallbackText(msg.JustificationLabel, "Justification"),
+		LinksLabel:         fallbackText(msg.LinksLabel, "Links"),
 	}
-	var builder strings.Builder
-	builder.Grow(len(value) * 2)
-	for _, r := range value {
-		switch r {
-		case '\\', '`':
-			builder.WriteByte('\\')
-		}
-		builder.WriteRune(r)
-	}
-	return builder.String()
 }
 
-func escapeMarkdownV2URL(value string) string {
-	if value == "" {
-		return value
+func fallbackText(value, fallback string) string {
+	if strings.TrimSpace(value) == "" {
+		return fallback
 	}
-	var builder strings.Builder
-	builder.Grow(len(value) * 2)
-	for _, r := range value {
-		switch r {
-		case '\\', ')':
-			builder.WriteByte('\\')
-		}
-		builder.WriteRune(r)
-	}
-	return builder.String()
+	return value
 }
