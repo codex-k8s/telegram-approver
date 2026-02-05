@@ -36,7 +36,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	server := httpapi.New(cfg.HTTPAddr, logger)
+	server := httpapi.New(cfg.HTTPAddr(), logger)
 	server.Handle("/approve", httpapi.NewApproveHandler(service, cfg, logger))
 	if webhook := service.WebhookHandler(); webhook != nil {
 		server.Handle("/webhook", webhook)

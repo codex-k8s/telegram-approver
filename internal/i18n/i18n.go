@@ -14,9 +14,13 @@ type Messages struct {
 	ApprovalCorrelation   string `yaml:"approval_correlation"`
 	ApprovalTool          string `yaml:"approval_tool"`
 	ApprovalParams        string `yaml:"approval_params"`
+	JustificationLabel    string `yaml:"justification_label"`
+	LinksLabel            string `yaml:"links_label"`
 	ApproveButton         string `yaml:"approve_button"`
 	DenyButton            string `yaml:"deny_button"`
 	DenyWithMessageButton string `yaml:"deny_with_message_button"`
+	CancelDenyButton      string `yaml:"cancel_deny_button"`
+	DeleteButton          string `yaml:"delete_button"`
 	DenyPrompt            string `yaml:"deny_prompt"`
 	ApprovedNote          string `yaml:"approved_note"`
 	DeniedNote            string `yaml:"denied_note"`

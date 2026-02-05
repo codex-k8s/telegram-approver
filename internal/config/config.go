@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -12,8 +13,10 @@ import (
 type Config struct {
 	// ServiceName is a human-friendly service name for logs.
 	ServiceName string `env:"TG_APPROVER_SERVICE_NAME" envDefault:"telegram-approver"`
-	// HTTPAddr is the HTTP listen address.
-	HTTPAddr string `env:"TG_APPROVER_HTTP_ADDR" envDefault:":8080"`
+	// HTTPHost is the HTTP listen host.
+	HTTPHost string `env:"TG_APPROVER_HTTP_HOST,required"`
+	// HTTPPort is the HTTP listen port.
+	HTTPPort int `env:"TG_APPROVER_HTTP_PORT" envDefault:"8080"`
 	// LogLevel controls log verbosity (debug, info, warn, error).
 	LogLevel string `env:"TG_APPROVER_LOG_LEVEL" envDefault:"info"`
 	// Lang selects i18n language (en or ru).
@@ -56,11 +59,23 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("approval timeout must be positive")
 	}
 
+	if strings.TrimSpace(cfg.HTTPHost) == "" {
+		return Config{}, fmt.Errorf("http host is required")
+	}
+	if cfg.HTTPPort < 1 || cfg.HTTPPort > 65535 {
+		return Config{}, fmt.Errorf("http port must be between 1 and 65535")
+	}
+
 	if (cfg.WebhookURL == "") != (cfg.WebhookSecret == "") {
 		return Config{}, fmt.Errorf("webhook url and secret must be set together")
 	}
 
 	return cfg, nil
+}
+
+// HTTPAddr returns a listen address for the HTTP server.
+func (c Config) HTTPAddr() string {
+	return net.JoinHostPort(strings.TrimSpace(c.HTTPHost), fmt.Sprintf("%d", c.HTTPPort))
 }
 
 // WebhookEnabled reports whether webhook mode is configured.

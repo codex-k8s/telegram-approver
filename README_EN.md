@@ -11,7 +11,7 @@
 
 `telegram-approver` is a minimal HTTP service that receives approval requests from `yaml-mcp-server`, sends them to Telegram, and returns the decision. It supports:
 
-- one active request at a time (others wait until timeout);
+- multiple concurrent requests;
 - **Approve / Deny / Deny with message** buttons;
 - optional voice denial reason (STT via OpenAI);
 - **long polling** and **webhook** modes;
@@ -21,12 +21,12 @@
 
 ## ✅ How it works
 
-1. `yaml-mcp-server` calls `POST /approve` and keeps the connection open.
+1. `yaml-mcp-server` calls `POST /approve` and receives **202 Accepted** (async).
 2. `telegram-approver` sends a Telegram message.
 3. The user selects a decision or sends a denial reason.
-4. `telegram-approver` returns JSON with `decision` and `reason`.
+4. `telegram-approver` sends a webhook callback to `yaml-mcp-server` with `decision` and `reason`.
 
-If the timeout expires, the response is `decision=error`, buttons are removed, and the message is updated with a timeout note.
+If the timeout expires, `decision=error` is sent, the message is updated with a timeout note, and buttons are replaced with a delete button.
 
 ---
 
@@ -66,7 +66,8 @@ All variables are prefixed with `TG_APPROVER_`:
 
 - `TG_APPROVER_TOKEN` — Telegram bot token (**required**)
 - `TG_APPROVER_CHAT_ID` — user chat ID (**required**)
-- `TG_APPROVER_HTTP_ADDR` — HTTP listen address (default `:8080`)
+- `TG_APPROVER_HTTP_HOST` — HTTP listen host (**required**)
+- `TG_APPROVER_HTTP_PORT` — HTTP listen port (default `8080`)
 - `TG_APPROVER_LANG` — messages language (`en`/`ru`, default `en`)
 - `TG_APPROVER_APPROVAL_TIMEOUT` — max wait time (default `1h`)
 - `TG_APPROVER_TIMEOUT_MESSAGE` — timeout text appended in Telegram (optional)
@@ -79,6 +80,9 @@ All variables are prefixed with `TG_APPROVER_`:
 - `TG_APPROVER_SHUTDOWN_TIMEOUT` — graceful shutdown timeout (default `10s`)
 
 Webhook mode is enabled **only if both** `TG_APPROVER_WEBHOOK_URL` and `TG_APPROVER_WEBHOOK_SECRET` are set.
+
+For local testing you can set `TG_APPROVER_HTTP_HOST=0.0.0.0`, but this is **unsafe** —
+use it only in an isolated environment.
 
 ---
 
@@ -96,20 +100,43 @@ Webhook mode is enabled **only if both** `TG_APPROVER_WEBHOOK_URL` and `TG_APPRO
     "namespace": "ai-staging",
     "k8s_secret_name": "pg-password"
   },
-  "timeout_sec": 3600
+  "justification": "Need a new password for the billing service.",
+  "approval_request": "Create a secret and inject it into Kubernetes.",
+  "links_to_code": [
+    { "text": "PR #42", "url": "https://github.com/org/repo/pull/42" }
+  ],
+  "lang": "en",
+  "markup": "markdown",
+  "timeout_sec": 3600,
+  "callback": {
+    "url": "http://yaml-mcp-server.codex-system.svc.cluster.local/approvals/webhook"
+  }
 }
 ```
+
+`callback.url` is required — decisions are always delivered asynchronously.
 
 **Response**:
 
 ```json
 {
-  "decision": "approve",
-  "reason": "approved"
+  "decision": "pending",
+  "reason": "queued",
+  "correlation_id": "req-123"
 }
 ```
 
-Allowed decisions: `approve`, `deny`, `error`.
+Allowed decisions: `pending`, `approve`, `deny`, `error`.
+
+### Webhook callback (to `yaml-mcp-server`)
+
+```json
+{
+  "correlation_id": "req-123",
+  "decision": "approve",
+  "reason": "ok"
+}
+```
 
 ### `POST /webhook`
 
@@ -123,9 +150,10 @@ Kubernetes health endpoints.
 
 ## 🧠 Telegram message format
 
-- Markdown is used.
+- Markdown or HTML is used (depending on `markup`).
 - Request parameters are shown as a JSON block.
-- For `Deny with message`, the bot waits for text or voice and returns it as `reason`.
+- For `Deny with message` the bot replies and waits for text/voice.
+- After a decision, buttons are replaced with a delete button.
 
 ---
 
@@ -144,8 +172,10 @@ sudo apt-get install -y ffmpeg
 ## 🧷 Security & limitations
 
 - The service is **stateless** (no external DB).
-- **One active request** at a time.
+- **Multiple active requests** are supported.
 - Requests are assumed to contain no secrets (no redaction is applied).
+- The `yaml-mcp-server` webhook has **no shared secret** — restrict access at the network level
+  (Kubernetes NetworkPolicy, service mesh/mTLS, private Service + no public Ingress).
 
 ---
 

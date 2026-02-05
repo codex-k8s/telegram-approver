@@ -1,7 +1,6 @@
 package approvals
 
 import (
-	"context"
 	"errors"
 	"sync"
 	"time"
@@ -17,7 +16,23 @@ const (
 	DecisionDeny Decision = "deny"
 	// DecisionError means the request failed.
 	DecisionError Decision = "error"
+	// DecisionPending means the request is queued for async approval.
+	DecisionPending Decision = "pending"
 )
+
+// Link points to a code reference.
+type Link struct {
+	// Text is the link label.
+	Text string `json:"text"`
+	// URL is the target URL.
+	URL string `json:"url"`
+}
+
+// Callback defines async approval callback settings.
+type Callback struct {
+	// URL is the webhook callback URL.
+	URL string `json:"url"`
+}
 
 // Request holds data required for approval.
 type Request struct {
@@ -27,6 +42,18 @@ type Request struct {
 	Tool string
 	// Arguments are tool arguments.
 	Arguments map[string]any
+	// Justification is a short reason from the model.
+	Justification string
+	// ApprovalRequest describes the requested action.
+	ApprovalRequest string
+	// LinksToCode are optional references.
+	LinksToCode []Link
+	// Lang selects message language.
+	Lang string
+	// Markup selects message formatting.
+	Markup string
+	// Callback contains webhook details.
+	Callback Callback
 }
 
 // Result represents the approval result.
@@ -49,133 +76,130 @@ type Approval struct {
 	MessageText string
 	// AwaitingReason marks that a deny reason is pending.
 	AwaitingReason bool
-	resultCh       chan Result
-	resolved       bool
 }
 
-// Registry stores the active approval request.
+// Registry stores active approval requests.
 type Registry struct {
-	slot   chan struct{}
-	mu     sync.Mutex
-	active *Approval
+	mu                sync.Mutex
+	approvals         map[string]*Approval
+	promptMessageID   int
+	promptCorrelation string
 }
 
-// ErrBusy is returned when an approval is already active.
-var ErrBusy = errors.New("approval already active")
+// ErrAlreadyExists is returned when the correlation id is already used.
+var ErrAlreadyExists = errors.New("approval already exists")
 
 // NewRegistry creates a new approval registry.
 func NewRegistry() *Registry {
-	slot := make(chan struct{}, 1)
-	slot <- struct{}{}
-	return &Registry{slot: slot}
+	return &Registry{approvals: make(map[string]*Approval)}
 }
 
-// Acquire blocks until the registry is ready to accept a new request.
-func (r *Registry) Acquire(ctx context.Context) error {
-	select {
-	case <-r.slot:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
-
-// Release frees the registry for a new request.
-func (r *Registry) Release() {
-	r.slot <- struct{}{}
-}
-
-// Start registers a new approval request.
-func (r *Registry) Start(req Request) (*Approval, error) {
+// Add registers a new approval request.
+func (r *Registry) Add(req Request) (*Approval, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.active != nil {
-		return nil, ErrBusy
+	if _, exists := r.approvals[req.CorrelationID]; exists {
+		return nil, ErrAlreadyExists
 	}
 	approval := &Approval{
 		Request:   req,
 		CreatedAt: time.Now(),
-		resultCh:  make(chan Result, 1),
 	}
-	r.active = approval
+	r.approvals[req.CorrelationID] = approval
 	return approval, nil
 }
 
-// Active returns the currently active approval.
-func (r *Registry) Active() *Approval {
+// Get returns the approval by correlation id.
+func (r *Registry) Get(correlationID string) *Approval {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.active
+	return r.approvals[correlationID]
 }
 
-// SetMessage stores Telegram message metadata for the active approval.
-func (r *Registry) SetMessage(approval *Approval, messageID int, messageText string) {
+// SetMessage stores Telegram message metadata for the approval.
+func (r *Registry) SetMessage(correlationID string, messageID int, messageText string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.active == approval {
+	if approval, ok := r.approvals[correlationID]; ok {
 		approval.MessageID = messageID
 		approval.MessageText = messageText
 	}
 }
 
-// MarkAwaitingReason switches the active approval into waiting for deny reason.
-func (r *Registry) MarkAwaitingReason(approval *Approval) bool {
+// StartReason marks approval as waiting for a deny reason and returns prompt to delete.
+func (r *Registry) StartReason(correlationID string) (int, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.active == nil || r.active != approval || approval.resolved {
-		return false
+	approval, ok := r.approvals[correlationID]
+	if !ok {
+		return 0, false
+	}
+	var previousPrompt int
+	if r.promptCorrelation != "" && r.promptCorrelation != correlationID {
+		if prevApproval, exists := r.approvals[r.promptCorrelation]; exists {
+			prevApproval.AwaitingReason = false
+		}
+		previousPrompt = r.promptMessageID
 	}
 	approval.AwaitingReason = true
-	return true
+	r.promptCorrelation = correlationID
+	r.promptMessageID = 0
+	return previousPrompt, true
 }
 
-// Resolve finalizes the active approval with the provided decision.
-func (r *Registry) Resolve(approval *Approval, decision Decision, reason string) bool {
+// SetPromptMessage stores the prompt message ID for the current deny flow.
+func (r *Registry) SetPromptMessage(correlationID string, messageID int) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.active == nil || r.active != approval || approval.resolved {
-		return false
+	if r.promptCorrelation == correlationID {
+		r.promptMessageID = messageID
 	}
-	approval.resolved = true
-	approval.AwaitingReason = false
-	approval.resultCh <- Result{Decision: decision, Reason: reason}
-	return true
 }
 
-// Clear removes the active approval state.
-func (r *Registry) Clear(approval *Approval) {
+// ClearPrompt removes the active deny prompt if it matches correlationID.
+func (r *Registry) ClearPrompt(correlationID string) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if r.active == approval {
-		r.active = nil
+	if r.promptCorrelation != correlationID {
+		return 0
 	}
+	if approval, ok := r.approvals[correlationID]; ok {
+		approval.AwaitingReason = false
+	}
+	removed := r.promptMessageID
+	r.promptMessageID = 0
+	r.promptCorrelation = ""
+	return removed
 }
 
-// Wait blocks until a result, timeout, or context cancellation.
-func (r *Registry) Wait(ctx context.Context, approval *Approval, timeout time.Duration, timeoutReason string) Result {
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case res := <-approval.resultCh:
-		return res
-	case <-timer.C:
-		if !r.Resolve(approval, DecisionError, timeoutReason) {
-			select {
-			case res := <-approval.resultCh:
-				return res
-			default:
-			}
-		}
-		return Result{Decision: DecisionError, Reason: timeoutReason}
-	case <-ctx.Done():
-		reason := "request cancelled"
-		if !r.Resolve(approval, DecisionError, reason) {
-			select {
-			case res := <-approval.resultCh:
-				return res
-			default:
-			}
-		}
-		return Result{Decision: DecisionError, Reason: reason}
+// CurrentPrompt returns the approval awaiting a deny reason and its prompt message id.
+func (r *Registry) CurrentPrompt() (*Approval, int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.promptCorrelation == "" {
+		return nil, 0
 	}
+	approval := r.approvals[r.promptCorrelation]
+	if approval == nil || !approval.AwaitingReason {
+		return nil, 0
+	}
+	return approval, r.promptMessageID
+}
+
+// Resolve removes the approval from the registry and clears prompt if needed.
+func (r *Registry) Resolve(correlationID string) (*Approval, int, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	approval, ok := r.approvals[correlationID]
+	if !ok {
+		return nil, 0, false
+	}
+	delete(r.approvals, correlationID)
+	promptID := 0
+	if r.promptCorrelation == correlationID {
+		promptID = r.promptMessageID
+		r.promptMessageID = 0
+		r.promptCorrelation = ""
+	}
+	return approval, promptID, true
 }
