@@ -1,46 +1,46 @@
 <div align="center">
   <img src="docs/media/logo.png" alt="PAI logo" width="120" height="120" />
   <h1>telegram-approver</h1>
-  <p>📨 Telegram‑аппрувер для <code>yaml-mcp-server</code>: интерактивное подтверждение опасных операций одним человеком в одном чате.</p>
+  <p>📨 Telegram approver for <code>yaml-mcp-server</code>: interactive approval of risky operations by one person in one chat.</p>
 </div>
 
 ![Go Version](https://img.shields.io/github/go-mod/go-version/codex-k8s/telegram-approver)
 [![Go Reference](https://pkg.go.dev/badge/github.com/codex-k8s/telegram-approver.svg)](https://pkg.go.dev/github.com/codex-k8s/telegram-approver)
 
-🇬🇧 English version: [README_EN.md](README_EN.md)
+🇷🇺 Русская версия: [README_RU.md](README_RU.md)
 
-`telegram-approver` — минимальный HTTP‑сервис, который получает запросы на approval от `yaml-mcp-server`, отправляет их в Telegram и возвращает решение обратно. Поддерживает:
+`telegram-approver` is a minimal HTTP service that receives approval requests from `yaml-mcp-server`, sends them to Telegram, and returns the decision. It supports:
 
-- несколько параллельных запросов;
-- кнопки **Approve / Deny / Deny with message**;
-- опциональную голосовую причину отказа (STT через OpenAI);
-- режимы **long polling** и **webhook**;
-- служебные endpoint’ы `healthz/readyz`.
-
----
-
-## ✅ Как это работает
-
-1. `yaml-mcp-server` вызывает `POST /approve` и получает **202 Accepted** (async).
-2. `telegram-approver` отправляет сообщение в Telegram.
-3. Пользователь выбирает решение или отправляет причину отказа.
-4. `telegram-approver` отправляет webhook‑callback в `yaml-mcp-server` с `decision` и `reason`.
-
-Если ожидание превысило таймаут — отправляется `decision=error`, в Telegram появляется пометка о таймауте, кнопки заменяются на кнопку удаления.
+- multiple concurrent requests;
+- **Approve / Deny / Deny with message** buttons;
+- optional voice denial reason (STT via OpenAI);
+- **long polling** and **webhook** modes;
+- `healthz/readyz` endpoints.
 
 ---
 
-## 🔗 Связанные репозитории
+## ✅ How it works
 
-- `yaml-mcp-server` — MCP‑gateway с YAML‑DSL и цепочками аппруверов: https://github.com/codex-k8s/yaml-mcp-server
-- `codexctl` — CLI‑оркестратор окружений и Codex‑потоков: https://github.com/codex-k8s/codexctl
-- `project-example` — пример Kubernetes‑проекта с готовыми манифестами: https://github.com/codex-k8s/project-example
+1. `yaml-mcp-server` calls `POST /approve` and receives **202 Accepted** (async).
+2. `telegram-approver` sends a Telegram message.
+3. The user selects a decision or sends a denial reason.
+4. `telegram-approver` sends a webhook callback to `yaml-mcp-server` with `decision` and `reason`.
+
+If the timeout expires, `decision=error` is sent, the message is updated with a timeout note, and buttons are replaced with a delete button.
 
 ---
 
-## 📦 Установка
+## 🔗 Related repositories
 
-Требования: Go **>= 1.25.5**.
+- `yaml-mcp-server` — MCP gateway with YAML DSL and approver chains: https://github.com/codex-k8s/yaml-mcp-server
+- `codexctl` — CLI orchestrator for environments and Codex workflows: https://github.com/codex-k8s/codexctl
+- `project-example` — Kubernetes project example with ready manifests: https://github.com/codex-k8s/project-example
+
+---
+
+## 📦 Installation
+
+Requirements: Go **>= 1.25.5**.
 
 ```bash
 go install github.com/codex-k8s/telegram-approver/cmd/telegram-approver@latest
@@ -48,41 +48,41 @@ go install github.com/codex-k8s/telegram-approver/cmd/telegram-approver@latest
 
 ---
 
-## 🔐 Подготовка Telegram‑бота
+## 🔐 Telegram bot setup
 
-1. Создай бота через **@BotFather** и получи токен.
-2. Узнай `chat_id` пользователя:
-   - Напиши боту любое сообщение (иначе он не сможет писать первым).
-   - Получи `chat_id` через тестовый скрипт/бота, либо через `getUpdates`.
-   - Быстрый вариант: написать **@userinfobot**.
+1. Create a bot via **@BotFather** and get the token.
+2. Obtain the user `chat_id`:
+   - Send any message to the bot first.
+   - Get `chat_id` via a helper bot/script or `getUpdates`.
+   - Quick option: use **@userinfobot**.
 
-> Важно: сервис принимает решения **только из одного чата**.
+> Important: the service accepts decisions **only from one chat**.
 
 ---
 
-## ⚙️ Переменные окружения
+## ⚙️ Environment variables
 
-Все переменные имеют префикс `TG_APPROVER_`:
+All variables are prefixed with `TG_APPROVER_`:
 
-- `TG_APPROVER_TOKEN` — токен Telegram‑бота (**обязателен**)
-- `TG_APPROVER_CHAT_ID` — chat ID пользователя (**обязателен**)
-- `TG_APPROVER_HTTP_HOST` — host HTTP‑сервера (**обязателен**)
-- `TG_APPROVER_HTTP_PORT` — порт HTTP‑сервера (по умолчанию `8080`)
-- `TG_APPROVER_LANG` — язык сообщений (`en`/`ru`, по умолчанию `en`)
-- `TG_APPROVER_APPROVAL_TIMEOUT` — общий таймаут ожидания (по умолчанию `1h`)
-- `TG_APPROVER_TIMEOUT_MESSAGE` — текст, добавляемый при таймауте (опционально)
-- `TG_APPROVER_WEBHOOK_URL` — URL для webhook‑режима (опционально)
-- `TG_APPROVER_WEBHOOK_SECRET` — секрет для webhook‑режима (опционально)
-- `TG_APPROVER_OPENAI_API_KEY` — ключ OpenAI для STT (опционально)
-- `TG_APPROVER_STT_MODEL` — модель STT (по умолчанию `gpt-4o-mini-transcribe`)
-- `TG_APPROVER_STT_TIMEOUT` — таймаут STT (по умолчанию `30s`)
-- `TG_APPROVER_LOG_LEVEL` — уровень логов (`debug|info|warn|error`)
-- `TG_APPROVER_SHUTDOWN_TIMEOUT` — таймаут graceful shutdown (по умолчанию `10s`)
+- `TG_APPROVER_TOKEN` — Telegram bot token (**required**)
+- `TG_APPROVER_CHAT_ID` — user chat ID (**required**)
+- `TG_APPROVER_HTTP_HOST` — HTTP listen host (**required**)
+- `TG_APPROVER_HTTP_PORT` — HTTP listen port (default `8080`)
+- `TG_APPROVER_LANG` — messages language (`en`/`ru`, default `en`)
+- `TG_APPROVER_APPROVAL_TIMEOUT` — max wait time (default `1h`)
+- `TG_APPROVER_TIMEOUT_MESSAGE` — timeout text appended in Telegram (optional)
+- `TG_APPROVER_WEBHOOK_URL` — webhook URL (optional)
+- `TG_APPROVER_WEBHOOK_SECRET` — webhook secret (optional)
+- `TG_APPROVER_OPENAI_API_KEY` — OpenAI API key for STT (optional)
+- `TG_APPROVER_STT_MODEL` — STT model (default `gpt-4o-mini-transcribe`)
+- `TG_APPROVER_STT_TIMEOUT` — STT timeout (default `30s`)
+- `TG_APPROVER_LOG_LEVEL` — log level (`debug|info|warn|error`)
+- `TG_APPROVER_SHUTDOWN_TIMEOUT` — graceful shutdown timeout (default `10s`)
 
-Webhook‑режим включается **только если заданы оба**: `TG_APPROVER_WEBHOOK_URL` и `TG_APPROVER_WEBHOOK_SECRET`.
+Webhook mode is enabled **only if both** `TG_APPROVER_WEBHOOK_URL` and `TG_APPROVER_WEBHOOK_SECRET` are set.
 
-Для локального теста можно указать `TG_APPROVER_HTTP_HOST=0.0.0.0`, но это **небезопасно** —
-используйте только в изолированной среде.
+For local testing you can set `TG_APPROVER_HTTP_HOST=0.0.0.0`, but this is **unsafe** —
+use it only in an isolated environment.
 
 ---
 
@@ -90,7 +90,7 @@ Webhook‑режим включается **только если заданы �
 
 ### `POST /approve`
 
-**Запрос**:
+**Request**:
 
 ```json
 {
@@ -100,13 +100,13 @@ Webhook‑режим включается **только если заданы �
     "namespace": "ai-staging",
     "k8s_secret_name": "pg-password"
   },
-  "justification": "Нужен новый пароль для сервиса billing.",
-  "approval_request": "Создать секрет и инъектировать в Kubernetes.",
-  "risk_assessment": "Может повлиять на доступ к БД при ошибочном применении секрета.",
+  "justification": "Need a new password for the billing service.",
+  "approval_request": "Create a secret and inject it into Kubernetes.",
+  "risk_assessment": "May affect DB access if the new secret is misused.",
   "links_to_code": [
     { "text": "PR #42", "url": "https://github.com/org/repo/pull/42" }
   ],
-  "lang": "ru",
+  "lang": "en",
   "markup": "markdown",
   "timeout_sec": 3600,
   "callback": {
@@ -115,11 +115,11 @@ Webhook‑режим включается **только если заданы �
 }
 ```
 
-`callback.url` обязателен — решение всегда отправляется асинхронно.
+`callback.url` is required — decisions are always delivered asynchronously.
 
-Обязательные поля (10–500 символов): `justification`, `approval_request`, `risk_assessment`.
+Required fields (10–500 chars): `justification`, `approval_request`, `risk_assessment`.
 
-**Ответ**:
+**Response**:
 
 ```json
 {
@@ -129,9 +129,9 @@ Webhook‑режим включается **только если заданы �
 }
 ```
 
-Допустимые решения: `pending`, `approve`, `deny`, `error`.
+Allowed decisions: `pending`, `approve`, `deny`, `error`.
 
-### Webhook callback (в `yaml-mcp-server`)
+### Webhook callback (to `yaml-mcp-server`)
 
 ```json
 {
@@ -143,28 +143,28 @@ Webhook‑режим включается **только если заданы �
 
 ### `POST /webhook`
 
-Webhook endpoint для Telegram. Проверяет секрет через заголовок `X-Telegram-Bot-Api-Secret-Token`.
+Telegram webhook endpoint. Secret is verified via `X-Telegram-Bot-Api-Secret-Token` header.
 
 ### `GET /healthz`, `GET /readyz`
 
-Служебные endpoint’ы для Kubernetes.
+Kubernetes health endpoints.
 
 ---
 
-## 🧠 Формат сообщений в Telegram
+## 🧠 Telegram message format
 
-- Используется MarkdownV2 или HTML (в зависимости от `markup`).
-- Параметры запроса выводятся в виде JSON‑блока.
-- При `Deny with message` бот отвечает **реплаем** и ждёт текст/голос.
-- После решения кнопки заменяются на «Удалить».
+- MarkdownV2 or HTML is used (depending on `markup`).
+- Request parameters are shown as a JSON block.
+- For `Deny with message` the bot replies and waits for text/voice.
+- After a decision, buttons are replaced with a delete button.
 
 ---
 
-## 🗣 Голосовые причины (STT)
+## 🗣 Voice reasons (STT)
 
-Если задан `TG_APPROVER_OPENAI_API_KEY`, бот принимает голосовые сообщения и распознаёт их через OpenAI `gpt-4o-mini-transcribe`. Аудио хранится **только в памяти** на время распознавания.
+If `TG_APPROVER_OPENAI_API_KEY` is set, the bot accepts voice messages and transcribes them via OpenAI `gpt-4o-mini-transcribe`. Audio is stored **in memory only** during transcription.
 
-Для распознавания голосовых сообщений требуется `ffmpeg` (используется для приведения формата в совместимый с OpenAI):
+For voice transcription, `ffmpeg` is required (used to normalize the format for OpenAI):
 
 ```
 sudo apt-get install -y ffmpeg
@@ -172,17 +172,17 @@ sudo apt-get install -y ffmpeg
 
 ---
 
-## 🧷 Безопасность и ограничения
+## 🧷 Security & limitations
 
-- Сервис **не хранит состояние** во внешних базах.
-- Поддерживается **несколько** активных запросов.
-- Предполагается, что в запросах нет секретов (они не маскируются).
-- Webhook в `yaml-mcp-server` **без секрета** — ограничьте доступ сетевыми политиками
-  (Kubernetes NetworkPolicy, service mesh/mTLS, приватный Service + запрет публичного Ingress).
+- The service is **stateless** (no external DB).
+- **Multiple active requests** are supported.
+- Requests are assumed to contain no secrets (no redaction is applied).
+- The `yaml-mcp-server` webhook has **no shared secret** — restrict access at the network level
+  (Kubernetes NetworkPolicy, service mesh/mTLS, private Service + no public Ingress).
 
 ---
 
-## 🔧 Разработка и релизы
+## 🔧 Development & releases
 
 ```bash
 ./dev/update.sh
@@ -190,6 +190,6 @@ sudo apt-get install -y ffmpeg
 
 ---
 
-## 📄 Лицензия
+## 📄 License
 
-См. [LICENSE](LICENSE).
+See [LICENSE](LICENSE).
