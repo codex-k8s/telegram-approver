@@ -2,7 +2,6 @@ package telegram
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -133,16 +132,12 @@ func (s *Service) SubmitApproval(ctx context.Context, req approvals.Request, tim
 }
 
 func (s *Service) renderMessage(req approvals.Request) string {
-	payload, err := json.MarshalIndent(req.Arguments, "", "  ")
-	if err != nil {
-		payload = []byte("{}")
-	}
 	msg := s.messagesFor(req.Lang)
 	switch strings.ToLower(strings.TrimSpace(req.Markup)) {
 	case "html":
-		return renderHTML(msg, req, payload)
+		return renderHTML(msg, req)
 	default:
-		return renderMarkdown(msg, req, payload)
+		return renderMarkdown(msg, req)
 	}
 }
 
@@ -204,7 +199,7 @@ func parseMode(markup string) string {
 	}
 }
 
-func renderMarkdown(msg i18n.Messages, req approvals.Request, payload []byte) string {
+func renderMarkdown(msg i18n.Messages, req approvals.Request) string {
 	builder := &strings.Builder{}
 	builder.WriteString("*")
 	builder.WriteString(escapeMarkdownV2(msg.ApprovalTitle))
@@ -216,13 +211,6 @@ func renderMarkdown(msg i18n.Messages, req approvals.Request, payload []byte) st
 	actionTitle := msg.SectionAction
 	if strings.TrimSpace(actionTitle) == "" {
 		actionTitle = "Action"
-	}
-	paramsTitle := msg.SectionParams
-	if strings.TrimSpace(paramsTitle) == "" {
-		paramsTitle = msg.ApprovalParams
-	}
-	if strings.TrimSpace(paramsTitle) == "" {
-		paramsTitle = "Parameters"
 	}
 	risksTitle := msg.SectionRisks
 	if strings.TrimSpace(risksTitle) == "" {
@@ -286,16 +274,10 @@ func renderMarkdown(msg i18n.Messages, req approvals.Request, payload []byte) st
 	builder.WriteString(":* `")
 	builder.WriteString(escapeMarkdownV2Code(req.CorrelationID))
 	builder.WriteString("`\n\n")
-
-	builder.WriteString("*")
-	builder.WriteString(escapeMarkdownV2(paramsTitle))
-	builder.WriteString("*\n\n```json\n")
-	builder.WriteString(escapeMarkdownV2CodeBlock(string(payload)))
-	builder.WriteString("\n```")
 	return builder.String()
 }
 
-func renderHTML(msg i18n.Messages, req approvals.Request, payload []byte) string {
+func renderHTML(msg i18n.Messages, req approvals.Request) string {
 	builder := &strings.Builder{}
 	builder.WriteString("<b>")
 	builder.WriteString(htmlEscape(msg.ApprovalTitle))
@@ -307,13 +289,6 @@ func renderHTML(msg i18n.Messages, req approvals.Request, payload []byte) string
 	actionTitle := msg.SectionAction
 	if strings.TrimSpace(actionTitle) == "" {
 		actionTitle = "Action"
-	}
-	paramsTitle := msg.SectionParams
-	if strings.TrimSpace(paramsTitle) == "" {
-		paramsTitle = msg.ApprovalParams
-	}
-	if strings.TrimSpace(paramsTitle) == "" {
-		paramsTitle = "Parameters"
 	}
 	risksTitle := msg.SectionRisks
 	if strings.TrimSpace(risksTitle) == "" {
@@ -377,12 +352,6 @@ func renderHTML(msg i18n.Messages, req approvals.Request, payload []byte) string
 	builder.WriteString(":</b> <code>")
 	builder.WriteString(htmlEscape(req.CorrelationID))
 	builder.WriteString("</code><br><br>")
-
-	builder.WriteString("<b>")
-	builder.WriteString(htmlEscape(paramsTitle))
-	builder.WriteString("</b><br><pre><code>")
-	builder.WriteString(htmlEscape(string(payload)))
-	builder.WriteString("</code></pre>")
 	return builder.String()
 }
 
@@ -414,22 +383,6 @@ func escapeMarkdownV2(value string) string {
 }
 
 func escapeMarkdownV2Code(value string) string {
-	if value == "" {
-		return value
-	}
-	var builder strings.Builder
-	builder.Grow(len(value) * 2)
-	for _, r := range value {
-		switch r {
-		case '\\', '`':
-			builder.WriteByte('\\')
-		}
-		builder.WriteRune(r)
-	}
-	return builder.String()
-}
-
-func escapeMarkdownV2CodeBlock(value string) string {
 	if value == "" {
 		return value
 	}

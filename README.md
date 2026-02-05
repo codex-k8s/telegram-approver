@@ -154,7 +154,7 @@ Kubernetes health endpoints.
 ## 🧠 Telegram message format
 
 - MarkdownV2 or HTML is used (depending on `markup`).
-- Request parameters are shown as a JSON block.
+- Context, action, justification, links, and risks are shown as plain sections.
 - For `Deny with message` the bot replies and waits for text/voice.
 - After a decision, buttons are replaced with a delete button.
 
